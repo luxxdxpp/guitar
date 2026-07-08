@@ -1,0 +1,6 @@
+{
+  "name": "Rehearsal Studio Dashboard",
+  "description": "Map-based Rehearsal Studio Finder & Dashboard integrated with Supabase Auth, Real-time Reviews, and Instrument Rental information.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
