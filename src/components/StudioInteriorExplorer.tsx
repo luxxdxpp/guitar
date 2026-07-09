@@ -33,21 +33,15 @@ export default function StudioInteriorExplorer({
   selectedStudio,
   onSelectStudio,
 }: StudioInteriorExplorerProps) {
-  if (!selectedStudio) {
-    return (
-      <div className="flex items-center justify-center h-96 bg-slate-950 rounded-2xl border border-slate-800 text-slate-400">
-        선택된 합주실이 없습니다.
-      </div>
-    );
-  }
-
   // Active room within the selected studio
-  const [activeRoom, setActiveRoom] = useState<Room>(selectedStudio.rooms[0]);
+  const [activeRoom, setActiveRoom] = useState<Room>(() => selectedStudio?.rooms?.[0] || { name: '', gear: [] } as any);
 
   // Sync active room when selectedStudio changes
   useEffect(() => {
-    setActiveRoom(selectedStudio.rooms[0]);
-  }, [selectedStudio.id]);
+    if (selectedStudio?.rooms?.[0]) {
+      setActiveRoom(selectedStudio.rooms[0]);
+    }
+  }, [selectedStudio?.id]);
 
   // Audio Simulator Play State
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -288,6 +282,14 @@ export default function StudioInteriorExplorer({
       }
     };
   }, []);
+
+  if (!selectedStudio) {
+    return (
+      <div className="flex items-center justify-center h-96 bg-slate-950 rounded-2xl border border-slate-800 text-slate-400">
+        선택된 합주실이 없습니다.
+      </div>
+    );
+  }
 
   // Compute total rent price
   const totalRentPrice = rentedItems.reduce((acc, name) => {
