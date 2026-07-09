@@ -42,6 +42,9 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
   const loadBookings = async () => {
     setIsLoading(true);
     try {
+      if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+      }
       const { data, error } = await supabase
         .from('studio_bookings')
         .select('*')
@@ -63,20 +66,25 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
   useEffect(() => {
     loadBookings();
 
-    // Subscribe to booking changes for real-time sync
-    const subscription = supabase
-      .channel('studio_bookings_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'studio_bookings' },
-        () => {
-          loadBookings();
-        }
-      )
-      .subscribe();
+    // Subscribe to booking changes for real-time sync if supabase is ready
+    let subscription: any = null;
+    if (supabase) {
+      subscription = supabase
+        .channel('studio_bookings_changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'studio_bookings' },
+          () => {
+            loadBookings();
+          }
+        )
+        .subscribe();
+    }
 
     return () => {
-      subscription.unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
   }, []);
 
@@ -94,6 +102,9 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
     };
 
     try {
+      if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+      }
       const { error } = await supabase.from('studio_bookings').insert([newBooking]);
       if (error) throw error;
       
@@ -120,6 +131,9 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
   const deleteBooking = async (id: string) => {
     if (!confirm('예약을 취소하시겠습니까?')) return;
     try {
+      if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+      }
       const { error } = await supabase.from('studio_bookings').delete().eq('id', id);
       if (error) throw error;
       loadBookings();

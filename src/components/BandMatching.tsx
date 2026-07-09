@@ -22,6 +22,9 @@ export default function BandMatching() {
   const loadMessages = async () => {
     setIsLoading(true);
     try {
+      if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+      }
       const { data, error } = await supabase
         .from('studio_community')
         .select('*')
@@ -65,19 +68,24 @@ export default function BandMatching() {
   useEffect(() => {
     loadMessages();
 
-    const subscription = supabase
-      .channel('studio_community_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'studio_community' },
-        () => {
-          loadMessages();
-        }
-      )
-      .subscribe();
+    let subscription: any = null;
+    if (supabase) {
+      subscription = supabase
+        .channel('studio_community_changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'studio_community' },
+          () => {
+            loadMessages();
+          }
+        )
+        .subscribe();
+    }
 
     return () => {
-      subscription.unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
   }, []);
 
@@ -96,6 +104,9 @@ export default function BandMatching() {
     };
 
     try {
+      if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+      }
       const { error } = await supabase.from('studio_community').insert([newMessage]);
       if (error) throw error;
       setContent('');
@@ -119,6 +130,9 @@ export default function BandMatching() {
   const deleteMessage = async (id: string) => {
     if (!confirm('게시글을 삭제하시겠습니까?')) return;
     try {
+      if (!supabase) {
+        throw new Error('Supabase client is not initialized');
+      }
       const { error } = await supabase.from('studio_community').delete().eq('id', id);
       if (error) throw error;
       loadMessages();
