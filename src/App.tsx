@@ -6,6 +6,7 @@ import {
   RentableInstrument 
 } from './data/studios';
 import StudioInteriorExplorer from './components/StudioInteriorExplorer';
+import StudioMap from './components/StudioMap';
 import StudioCompare from './components/StudioCompare';
 import BookingSimulator from './components/BookingSimulator';
 import BandMatching from './components/BandMatching';
@@ -448,6 +449,13 @@ export default function App() {
           {/* LEFT SIDE: MAP & LIST OF STUDIOS */}
           <div className="lg:col-span-7 flex flex-col gap-6">
             
+            {/* Interactive Studio Map */}
+            <StudioMap
+              studios={filteredStudios}
+              selectedStudio={selectedStudio}
+              onSelectStudio={(studio) => setSelectedStudio(studio)}
+            />
+
             {/* Studio Interior & Acoustic Simulator Container */}
             <div className="w-full">
               <StudioInteriorExplorer
