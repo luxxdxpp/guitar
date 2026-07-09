@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Studio } from '../data/studios';
-import { MapPin, Navigation, Star, Phone, AlertTriangle } from 'lucide-react';
+import { MapPin, Navigation, Star, Phone, AlertTriangle, ChevronDown, ChevronUp, Copy, Check, Settings } from 'lucide-react';
 
 interface StudioMapProps {
   studios: Studio[];
@@ -26,6 +26,8 @@ export default function StudioMap({
   
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || '';
 
@@ -232,47 +234,144 @@ export default function StudioMap({
     }
   }, [scriptLoaded, selectedStudio]);
 
-  return (
-    <div className="relative w-full h-[320px] md:h-[400px] rounded-2xl overflow-hidden border border-slate-900 bg-slate-950/80 shadow-inner group flex items-center justify-center">
-      {/* Map Element */}
-      {scriptLoaded && !scriptError ? (
-        <div id="studio-map-pane" ref={mapContainerRef} className="w-full h-full z-10" />
-      ) : (
-        <div className="flex flex-col items-center justify-center p-6 text-center max-w-md z-10">
-          {scriptError ? (
-            <>
-              <AlertTriangle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
-              <h3 className="text-sm font-bold text-slate-200 mb-2">네이버 지도 연동 오류</h3>
-              <p className="text-xs text-slate-400 mb-4">{scriptError}</p>
-            </>
-          ) : (
-            <>
-              <div className="w-8 h-8 rounded-full border-2 border-rose-500 border-t-transparent animate-spin mb-4" />
-              <h3 className="text-sm font-bold text-slate-200 mb-1">네이버 지도 불러오는 중</h3>
-              <p className="text-xs text-slate-400">네이버 지도 API를 안전하게 연동하고 있습니다...</p>
-            </>
-          )}
-        </div>
-      )}
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
-      {/* Floating Info Overlay (Minimal & Slick) */}
-      <div className="absolute top-3 left-3 z-20 pointer-events-none flex flex-col gap-1.5">
-        <div className="px-3 py-1.5 rounded-xl bg-slate-950/90 backdrop-blur-md border border-slate-900 shadow-lg flex items-center gap-2">
-          <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
-          <span className="text-[11px] font-bold text-slate-200 uppercase tracking-wider">
-            NAVER MAP V3 실시간 지도
-          </span>
-          <span className="text-[10px] text-slate-500 font-semibold border-l border-slate-800 pl-2">
-            {studios.length}개 위치 표시
-          </span>
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(currentOrigin);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="flex flex-col gap-3 w-full">
+      {/* Map Main Container */}
+      <div className="relative w-full h-[320px] md:h-[400px] rounded-2xl overflow-hidden border border-slate-900 bg-slate-950/80 shadow-inner group flex items-center justify-center">
+        {/* Map Element */}
+        {scriptLoaded && !scriptError ? (
+          <div id="studio-map-pane" ref={mapContainerRef} className="w-full h-full z-10" />
+        ) : (
+          <div className="flex flex-col items-center justify-center p-6 text-center max-w-md z-10">
+            {scriptError ? (
+              <>
+                <AlertTriangle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
+                <h3 className="text-sm font-bold text-slate-200 mb-2">네이버 지도 연동 오류</h3>
+                <p className="text-xs text-slate-400 mb-4">{scriptError}</p>
+              </>
+            ) : (
+              <>
+                <div className="w-8 h-8 rounded-full border-2 border-rose-500 border-t-transparent animate-spin mb-4" />
+                <h3 className="text-sm font-bold text-slate-200 mb-1">네이버 지도 불러오는 중</h3>
+                <p className="text-xs text-slate-400">네이버 지도 API를 안전하게 연동하고 있습니다...</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Floating Info Overlay (Minimal & Slick) */}
+        <div className="absolute top-3 left-3 z-20 pointer-events-none flex flex-col gap-1.5">
+          <div className="px-3 py-1.5 rounded-xl bg-slate-950/90 backdrop-blur-md border border-slate-900 shadow-lg flex items-center gap-2">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+            <span className="text-[11px] font-bold text-slate-200 uppercase tracking-wider">
+              NAVER MAP V3 실시간 지도
+            </span>
+            <span className="text-[10px] text-slate-500 font-semibold border-l border-slate-800 pl-2">
+              {studios.length}개 위치 표시
+            </span>
+          </div>
+        </div>
+
+        {/* Floating Quick Action Overlay */}
+        <div className="absolute bottom-3 left-3 z-20 pointer-events-none">
+          <div className="px-2.5 py-1.25 rounded-lg bg-slate-950/80 backdrop-blur-sm border border-slate-900 text-[10px] text-slate-400">
+            * 네이버 지도의 정확한 좌표에 실시간 마커가 동기화됩니다.
+          </div>
         </div>
       </div>
 
-      {/* Floating Quick Action Overlay */}
-      <div className="absolute bottom-3 left-3 z-20 pointer-events-none">
-        <div className="px-2.5 py-1.25 rounded-lg bg-slate-950/80 backdrop-blur-sm border border-slate-900 text-[10px] text-slate-400">
-          * 네이버 지도의 정확한 좌표에 실시간 마커가 동기화됩니다.
-        </div>
+      {/* Naver Maps API Troubleshooting & Setup Guide Card */}
+      <div className="bg-slate-900/40 border border-slate-900 rounded-2xl overflow-hidden transition-all duration-300">
+        <button
+          type="button"
+          onClick={() => setShowGuide(!showGuide)}
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-900/30 text-left transition"
+        >
+          <div className="flex items-center gap-2">
+            <Settings className="w-4 h-4 text-rose-400 animate-spin-slow" />
+            <span className="text-xs font-bold text-slate-300">
+              네이버 지도 API 연동 & 인증 실패 해결 가이드 (중요)
+            </span>
+          </div>
+          {showGuide ? (
+            <ChevronUp className="w-4 h-4 text-slate-500" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-500" />
+          )}
+        </button>
+
+        {showGuide && (
+          <div className="px-4 pb-4 border-t border-slate-900/60 pt-3 text-[11px] text-slate-400 space-y-3.5 leading-relaxed">
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-850">
+              <span className="font-bold text-rose-400 block mb-1">⚠️ "지도 API 인증에 실패했습니다" 경고창이 뜨는 이유</span>
+              네이버 지도는 보안을 위해 등록된 <strong className="text-slate-200">정확한 웹 서비스 URL(도메인 주소)</strong>에서만 API가 호출되도록 허용합니다. 현재 AI Studio 미리보기 서버의 주소가 네이버 클라우드 콘솔에 등록되어 있지 않거나 Client ID가 다를 수 있습니다.
+            </div>
+
+            <div className="space-y-2">
+              <span className="font-bold text-slate-300 block">💡 3분 만에 네이버 지도 연동 완벽하게 해결하기:</span>
+              <ol className="list-decimal pl-4.5 space-y-2 text-slate-400">
+                <li>
+                  <a 
+                    href="https://console.ncloud.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-indigo-400 hover:underline font-bold"
+                  >
+                    네이버 클라우드 플랫폼 콘솔 (console.ncloud.com)
+                  </a>
+                  에 로그인한 뒤, <strong className="text-slate-200">Services &gt; AI·NAVER API &gt; Application</strong> 메뉴로 이동합니다.
+                </li>
+                <li>
+                  등록된 Application 목록에서 사용 중인 앱을 찾아 <strong className="text-slate-200">변경(Edit)</strong>을 클릭합니다.
+                </li>
+                <li>
+                  <strong className="text-slate-200">웹 서비스 URL(Web Service URL)</strong> 설정 항목을 찾습니다.
+                </li>
+                <li>
+                  아래의 주소들을 복사하여 각각 한 줄씩 추가한 후 저장합니다.
+                  <div className="mt-2 flex flex-col gap-1.5 max-w-md">
+                    <div className="flex items-center justify-between p-2 bg-slate-950 border border-slate-850 rounded-lg">
+                      <span className="font-mono text-[10px] text-indigo-300 select-all truncate mr-2">
+                        {currentOrigin || "https://ais-dev-..."}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={copyToClipboard}
+                        className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-[10px] font-bold text-slate-300 transition shrink-0 flex items-center gap-1"
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>복사됨!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>주소 복사</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-slate-500">
+                      * 로컬 테스트를 위해 <code className="text-slate-400">http://localhost:3000</code> 도 함께 등록해두는 것이 좋습니다.
+                    </span>
+                  </div>
+                </li>
+                <li>
+                  우측 상단 <strong className="text-slate-200">Settings &gt; Secrets</strong> 메뉴에서 <code className="text-rose-400 font-bold">VITE_NAVER_MAP_CLIENT_ID</code> 환경변수 값으로 발급받은 클라이언트 아이디를 정확히 등록했는지 재차 확인해 주세요.
+                </li>
+              </ol>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
