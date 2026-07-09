@@ -123,7 +123,7 @@ export default function StudioMap({
       activeInfoWindowRef.current.close();
       activeInfoWindowRef.current = null;
     }
-    Object.values(markersRef.current).forEach((marker) => {
+    (Object.values(markersRef.current) as any[]).forEach((marker) => {
       marker.setMap(null);
     });
     markersRef.current = {};
