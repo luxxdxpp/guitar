@@ -8,13 +8,15 @@ interface StudioCompareProps {
 
 export default function StudioCompare({ studios }: StudioCompareProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const toggleSelect = (id: string) => {
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter((item) => item !== id));
     } else {
       if (selectedIds.length >= 3) {
-        alert('최대 3개 합주실까지만 동시 비교가 가능합니다.');
+        setErrorMsg('최대 3개 합주실까지만 동시 비교가 가능합니다.');
+        setTimeout(() => setErrorMsg(null), 3000);
         return;
       }
       setSelectedIds([...selectedIds, id]);
@@ -24,7 +26,13 @@ export default function StudioCompare({ studios }: StudioCompareProps) {
   const compareList = studios.filter((s) => selectedIds.includes(s.id));
 
   return (
-    <div className="bg-slate-900/40 border border-slate-900/80 rounded-3xl p-5 md:p-6 shadow-2xl">
+    <div className="bg-slate-900/40 border border-slate-900/80 rounded-3xl p-5 md:p-6 shadow-2xl relative">
+      {errorMsg && (
+        <div className="absolute top-4 right-4 z-50 bg-rose-600 border border-rose-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 animate-pulse">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
           <Scale className="w-5 h-5" />

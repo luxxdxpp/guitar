@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Studio } from '../data/studios';
-import { Calendar, Clock, Guitar, CreditCard, Sparkles, AlertCircle, Trash2, CalendarCheck } from 'lucide-react';
+import { Calendar, Clock, Guitar, CreditCard, Sparkles, AlertCircle, Trash2, CalendarCheck, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface BookingSimulatorProps {
@@ -28,10 +28,21 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // Custom toast and cancel confirmation overlay states
+  const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   // Sync studio rooms when studio changes
   useEffect(() => {
-    setSelectedRoom(selectedStudio.rooms[0]);
-    if (selectedStudio.hasGuitarRental && selectedStudio.rentInstruments.length > 0) {
+    if (selectedStudio?.rooms?.[0]) {
+      setSelectedRoom(selectedStudio.rooms[0]);
+    }
+    if (selectedStudio?.hasGuitarRental && selectedStudio?.rentInstruments && selectedStudio.rentInstruments.length > 0) {
       setRentInstrument(selectedStudio.rentInstruments[0].name);
     } else {
       setRentInstrument('없음');
@@ -90,11 +101,12 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
 
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    const totalPrice = selectedRoom.pricePerHour * duration;
+    const roomPrice = selectedRoom?.pricePerHour || 0;
+    const totalPrice = roomPrice * duration;
 
     const newBooking = {
-      studio_name: selectedStudio.name,
-      room_name: selectedRoom.name,
+      studio_name: selectedStudio?.name || '',
+      room_name: selectedRoom?.name || '',
       booking_date: bookingDate,
       booking_time: bookingTime,
       instrument_rented: rentInstrument,
@@ -110,7 +122,7 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
       
       // Force reload if subscription didn't trigger immediately
       loadBookings();
-      alert('예약이 성공적으로 완료되었습니다!');
+      showToast('예약이 성공적으로 완료되었습니다!', 'success');
     } catch (err) {
       console.warn('Saving to local storage due to connection fallback:', err);
       // Fallback
@@ -124,12 +136,15 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
       const updated = [localBookingRecord, ...parsed];
       localStorage.setItem('spotlight_bookings', JSON.stringify(updated));
       setBookings(updated);
-      alert('예약이 성공적으로 완료되었습니다! (로컬 모드 저장됨)');
+      showToast('예약이 성공적으로 완료되었습니다! (로컬 모드 저장됨)', 'success');
     }
   };
 
-  const deleteBooking = async (id: string) => {
-    if (!confirm('예약을 취소하시겠습니까?')) return;
+  const deleteBooking = (id: string) => {
+    setCancelTargetId(id);
+  };
+
+  const executeDeleteBooking = async (id: string) => {
     try {
       if (!supabase) {
         throw new Error('Supabase client is not initialized');
@@ -137,16 +152,63 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
       const { error } = await supabase.from('studio_bookings').delete().eq('id', id);
       if (error) throw error;
       loadBookings();
+      showToast('예약이 성공적으로 취소되었습니다.', 'success');
     } catch (err) {
       console.warn('Deleting from local storage fallback:', err);
       const updated = bookings.filter((b) => b.id !== id);
       localStorage.setItem('spotlight_bookings', JSON.stringify(updated));
       setBookings(updated);
+      showToast('예약이 성공적으로 취소되었습니다. (로컬)', 'success');
+    } finally {
+      setCancelTargetId(null);
     }
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+      {/* Toast Alert Banner */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl shadow-lg border flex items-center gap-2 animate-bounce ${
+          toast.type === 'success' 
+            ? 'bg-emerald-600 border-emerald-500 text-white' 
+            : 'bg-rose-600 border-rose-500 text-white'
+        }`}>
+          {toast.type === 'success' ? <Check className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+          <span className="text-xs font-bold">{toast.text}</span>
+        </div>
+      )}
+
+      {/* Booking Cancel Confirmation Overlay Modal */}
+      {cancelTargetId && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4 text-center animate-fade-in">
+            <div className="w-12 h-12 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto">
+              <CalendarCheck className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-100">합주실 예약 취소 확인</h4>
+              <p className="text-xs text-slate-400 mt-1">선택하신 합주실 예약을 취소하시겠습니까? 로컬 또는 클라우드 DB에서 실시간 제거됩니다.</p>
+            </div>
+            <div className="flex gap-2.5 mt-2">
+              <button
+                type="button"
+                onClick={() => setCancelTargetId(null)}
+                className="flex-1 py-2 rounded-xl bg-slate-950 hover:bg-slate-850 text-slate-400 border border-slate-850 font-bold text-xs transition"
+              >
+                아니오
+              </button>
+              <button
+                type="button"
+                onClick={() => executeDeleteBooking(cancelTargetId)}
+                className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition"
+              >
+                취소하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Interactive Booking Form */}
       <form
         onSubmit={handleBooking}
@@ -168,7 +230,7 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
             <div>
               <label className="text-[11px] text-slate-400 block font-bold mb-1.5 uppercase tracking-wider">합주실 선택</label>
               <select
-                value={selectedStudio.id}
+                value={selectedStudio?.id || ''}
                 onChange={(e) => {
                   const s = studios.find((x) => x.id === e.target.value);
                   if (s) setSelectedStudio(s);
@@ -189,12 +251,12 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
               <select
                 value={selectedRoom?.name || ''}
                 onChange={(e) => {
-                  const r = selectedStudio.rooms.find((x) => x.name === e.target.value);
+                  const r = selectedStudio?.rooms?.find((x) => x.name === e.target.value);
                   if (r) setSelectedRoom(r);
                 }}
                 className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
               >
-                {selectedStudio.rooms.map((r, idx) => (
+                {selectedStudio?.rooms?.map((r, idx) => (
                   <option key={idx} value={r.name}>
                     {r.name} ({r.pricePerHour.toLocaleString()}원/h)
                   </option>
@@ -249,13 +311,13 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
             <div className="flex items-center gap-3 p-3 bg-slate-950 border border-slate-850 rounded-xl">
               <Guitar className="w-5 h-5 text-indigo-400" />
               <div className="flex-grow">
-                {selectedStudio.hasGuitarRental ? (
+                {selectedStudio?.hasGuitarRental ? (
                   <select
                     value={rentInstrument}
                     onChange={(e) => setRentInstrument(e.target.value)}
                     className="w-full bg-transparent border-none text-xs text-slate-200 focus:outline-none"
                   >
-                    {selectedStudio.rentInstruments.map((inst, idx) => (
+                    {selectedStudio?.rentInstruments?.map((inst, idx) => (
                       <option key={idx} value={inst.name} className="bg-slate-950">
                         {inst.name} (무료 대여)
                       </option>
@@ -277,7 +339,7 @@ export default function BookingSimulator({ studios }: BookingSimulatorProps) {
           <div className="text-center md:text-left">
             <span className="text-[10px] text-slate-500 uppercase tracking-widest block font-bold">합계 시뮬레이션</span>
             <div className="flex items-baseline gap-1">
-              <span className="text-xl font-bold text-slate-100">{(selectedRoom.pricePerHour * duration).toLocaleString()}</span>
+              <span className="text-xl font-bold text-slate-100">{((selectedRoom?.pricePerHour || 0) * duration).toLocaleString()}</span>
               <span className="text-xs text-slate-400">원</span>
               {rentInstrument !== '없음' && (
                 <span className="text-[10px] text-emerald-400 font-bold ml-2 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">

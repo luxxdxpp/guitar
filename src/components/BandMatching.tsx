@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Send, MessageSquare, Trash2, Globe, Disc, RefreshCw } from 'lucide-react';
+import { Users, Send, MessageSquare, Trash2, Globe, Disc, RefreshCw, AlertCircle, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface MessageRecord {
@@ -18,6 +18,15 @@ export default function BandMatching() {
   const [content, setContent] = useState<string>('');
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  
+  // Custom toast and overlay modal states
+  const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const loadMessages = async () => {
     setIsLoading(true);
@@ -92,7 +101,7 @@ export default function BandMatching() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!author.trim() || !content.trim()) {
-      alert('닉네임과 내용일 모두 입력해 주세요.');
+      showToast('닉네임과 내용을 모두 입력해 주세요.', 'error');
       return;
     }
 
@@ -111,6 +120,7 @@ export default function BandMatching() {
       if (error) throw error;
       setContent('');
       loadMessages();
+      showToast('포스팅이 성공적으로 등록되었습니다!', 'success');
     } catch (err) {
       console.warn('Saving message to local storage fallback:', err);
       const cached = localStorage.getItem('spotlight_community');
@@ -124,11 +134,15 @@ export default function BandMatching() {
       localStorage.setItem('spotlight_community', JSON.stringify(updated));
       setMessages(updated);
       setContent('');
+      showToast('포스팅이 성공적으로 등록되었습니다! (로컬)', 'success');
     }
   };
 
-  const deleteMessage = async (id: string) => {
-    if (!confirm('게시글을 삭제하시겠습니까?')) return;
+  const deleteMessage = (id: string) => {
+    setDeleteTargetId(id);
+  };
+
+  const executeDeleteMessage = async (id: string) => {
     try {
       if (!supabase) {
         throw new Error('Supabase client is not initialized');
@@ -136,16 +150,63 @@ export default function BandMatching() {
       const { error } = await supabase.from('studio_community').delete().eq('id', id);
       if (error) throw error;
       loadMessages();
+      showToast('포스팅이 성공적으로 삭제되었습니다.', 'success');
     } catch (err) {
       console.warn('Deleting message fallback:', err);
       const updated = messages.filter((m) => m.id !== id);
       localStorage.setItem('spotlight_community', JSON.stringify(updated));
       setMessages(updated);
+      showToast('포스팅이 성공적으로 삭제되었습니다. (로컬)', 'success');
+    } finally {
+      setDeleteTargetId(null);
     }
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative">
+      {/* Toast Alert Banner */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl shadow-lg border flex items-center gap-2 animate-bounce ${
+          toast.type === 'success' 
+            ? 'bg-emerald-600 border-emerald-500 text-white' 
+            : 'bg-rose-600 border-rose-500 text-white'
+        }`}>
+          {toast.type === 'success' ? <Check className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+          <span className="text-xs font-bold">{toast.text}</span>
+        </div>
+      )}
+
+      {/* Delete Confirmation Overlay Modal */}
+      {deleteTargetId && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4 text-center animate-fade-in">
+            <div className="w-12 h-12 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-100">게시글 삭제 확인</h4>
+              <p className="text-xs text-slate-400 mt-1">이 게시글을 정말로 영구 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.</p>
+            </div>
+            <div className="flex gap-2.5 mt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetId(null)}
+                className="flex-1 py-2 rounded-xl bg-slate-950 hover:bg-slate-850 text-slate-400 border border-slate-850 font-bold text-xs transition"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => executeDeleteMessage(deleteTargetId)}
+                className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition"
+              >
+                삭제하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Messages List Area */}
       <div className="lg:col-span-7 bg-slate-900/40 border border-slate-900/80 rounded-3xl p-5 md:p-6 shadow-2xl flex flex-col justify-between min-h-[400px]">
         <div>
