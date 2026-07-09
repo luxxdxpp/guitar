@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Studio } from '../data/studios';
-import { MapPin, Navigation, Star, Phone, AlertTriangle, ChevronDown, ChevronUp, Copy, Check, Settings } from 'lucide-react';
+import { MapPin, Navigation, Star, Phone, AlertTriangle, ChevronDown, ChevronUp, Copy, Check, Settings, Globe } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface StudioMapProps {
   studios: Studio[];
@@ -20,21 +22,32 @@ export default function StudioMap({
   onSelectStudio,
 }: StudioMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Naver Map Refs
   const mapRef = useRef<any>(null);
   const markersRef = useRef<{ [key: string]: any }>({});
   const activeInfoWindowRef = useRef<any>(null);
+  
+  // Leaflet Map Refs
+  const leafletMapRef = useRef<any>(null);
+  const leafletMarkersRef = useRef<{ [key: string]: any }>({});
+
+  const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || '';
+
+  // Choose default map type: if clientId is present, use naver; otherwise fallback to leaflet
+  const [activeMapType, setActiveMapType] = useState<'naver' | 'leaflet'>(
+    clientId ? 'naver' : 'leaflet'
+  );
   
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || '';
-
   // 1. Load Naver Map Script dynamically
   useEffect(() => {
     if (!clientId) {
-      setScriptError('Naver Map Client ID is missing. Please set VITE_NAVER_MAP_CLIENT_ID in the environment settings.');
+      // If clientId is missing, we don't treat it as a hard error because we have Leaflet
       return;
     }
 
@@ -57,11 +70,9 @@ export default function StudioMap({
     }
 
     const handleLoad = () => {
-      // Sometimes naver.maps takes a split second to be ready on window
       if (window.naver && window.naver.maps) {
         setScriptLoaded(true);
       } else {
-        // Retry shortly
         setTimeout(() => {
           if (window.naver && window.naver.maps) {
             setScriptLoaded(true);
@@ -87,8 +98,9 @@ export default function StudioMap({
     };
   }, [clientId]);
 
-  // 2. Initialize Map once script is loaded
+  // 2. Initialize Naver Map once script is loaded
   useEffect(() => {
+    if (activeMapType !== 'naver') return;
     if (!scriptLoaded || !mapContainerRef.current || mapRef.current) return;
 
     try {
@@ -113,10 +125,11 @@ export default function StudioMap({
         mapRef.current = null;
       }
     };
-  }, [scriptLoaded]);
+  }, [scriptLoaded, activeMapType]);
 
-  // 3. Update Markers when studios list or map changes
+  // 3. Update Naver Markers when studios list or map changes
   useEffect(() => {
+    if (activeMapType !== 'naver') return;
     const map = mapRef.current;
     if (!scriptLoaded || !map) return;
 
@@ -134,7 +147,6 @@ export default function StudioMap({
     studios.forEach((studio) => {
       const isSelected = selectedStudio?.id === studio.id;
 
-      // Custom HTML Marker matching our aesthetic (Rose colored pin)
       const pulseHtml = isSelected
         ? `<div class="relative flex items-center justify-center w-8 h-8">
              <span class="animate-ping absolute inline-flex h-7 w-7 rounded-full bg-rose-400 opacity-60"></span>
@@ -164,7 +176,6 @@ export default function StudioMap({
         },
       });
 
-      // Custom styled Infowindow popup matching slate-900 dark theme
       const popupContent = `
         <div style="padding: 10px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); font-family: sans-serif; color: #f1f5f9; min-width: 220px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
@@ -207,7 +218,6 @@ export default function StudioMap({
       markersRef.current[studio.id] = marker;
     });
 
-    // Auto-fit bounds if we have studios
     if (studios.length > 0) {
       const bounds = new window.naver.maps.LatLngBounds();
       studios.forEach((studio) => {
@@ -215,10 +225,11 @@ export default function StudioMap({
       });
       map.fitBounds(bounds);
     }
-  }, [scriptLoaded, studios]);
+  }, [scriptLoaded, studios, activeMapType]);
 
-  // 4. Handle smooth pan and open popup programmatically when selectedStudio changes
+  // 4. Handle smooth pan and open popup programmatically when selectedStudio changes (Naver)
   useEffect(() => {
+    if (activeMapType !== 'naver') return;
     const map = mapRef.current;
     if (!scriptLoaded || !map || !selectedStudio) return;
 
@@ -232,7 +243,139 @@ export default function StudioMap({
         window.naver.maps.Event.trigger(marker, 'click');
       }, 300);
     }
-  }, [scriptLoaded, selectedStudio]);
+  }, [scriptLoaded, selectedStudio, activeMapType]);
+
+  // 5. Initialize Leaflet Map once activeMapType is set to 'leaflet'
+  useEffect(() => {
+    if (activeMapType !== 'leaflet') return;
+    if (!mapContainerRef.current || leafletMapRef.current) return;
+
+    try {
+      const map = L.map(mapContainerRef.current, {
+        center: [37.5518, 126.9245],
+        zoom: 13,
+        zoomControl: true,
+      });
+
+      // Slick styled Dark Matter theme matching our slate/rose vibe perfectly
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20,
+      }).addTo(map);
+
+      leafletMapRef.current = map;
+    } catch (err) {
+      console.error('Error initializing Leaflet map:', err);
+    }
+
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, [activeMapType]);
+
+  // 6. Update Leaflet Markers when studios list changes
+  useEffect(() => {
+    if (activeMapType !== 'leaflet') return;
+    const map = leafletMapRef.current;
+    if (!map) return;
+
+    // Remove old markers
+    Object.values(leafletMarkersRef.current).forEach((marker: any) => {
+      marker.remove();
+    });
+    leafletMarkersRef.current = {};
+
+    studios.forEach((studio) => {
+      const isSelected = selectedStudio?.id === studio.id;
+
+      const customHtml = isSelected
+        ? `<div class="relative flex items-center justify-center w-8 h-8">
+             <span class="animate-ping absolute inline-flex h-7 w-7 rounded-full bg-rose-400 opacity-60"></span>
+             <div class="relative p-1.5 bg-rose-500 rounded-full border border-white shadow-md flex items-center justify-center">
+               <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                 <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+               </svg>
+             </div>
+           </div>`
+        : `<div class="relative flex items-center justify-center w-8 h-8 group">
+             <div class="relative p-1.5 bg-slate-900 group-hover:bg-rose-500/20 border border-slate-800 group-hover:border-rose-400 rounded-full shadow-md flex items-center justify-center transition-colors duration-200">
+               <svg class="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                 <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+               </svg>
+             </div>
+           </div>`;
+
+      const icon = L.divIcon({
+        html: customHtml,
+        className: 'custom-marker-wrapper',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      });
+
+      const popupContent = `
+        <div style="font-family: sans-serif; min-width: 200px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <span style="padding: 1px 6px; border-radius: 4px; font-size: 9px; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.2); color: #f43f5e; font-weight: bold; text-transform: uppercase;">
+              ${studio.region}
+            </span>
+            <div style="display: flex; align-items: center; gap: 2px; color: #fbbf24; font-size: 11px; font-weight: bold;">
+              ★ ${studio.rating}
+            </div>
+          </div>
+          <h4 style="font-size: 13px; font-weight: bold; margin: 0 0 4px 0; color: #ffffff;">${studio.name}</h4>
+          <p style="font-size: 10px; color: #94a3b8; margin: 0 0 8px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${studio.address}</p>
+          <div style="border-top: 1px solid rgba(51, 65, 85, 0.5); padding-top: 8px;">
+            <a href="https://map.naver.com/v5/search/${encodeURIComponent(studio.name)}" target="_blank" rel="noopener noreferrer" style="display: block; width: 100%; text-align: center; padding: 5px 0; background: #059669; color: #ffffff; font-size: 10px; font-weight: bold; border-radius: 6px; text-decoration: none; transition: background 0.2s;">
+              네이버 길찾기
+            </a>
+          </div>
+        </div>
+      `;
+
+      const marker = L.marker([studio.latitude, studio.longitude], { icon })
+        .addTo(map)
+        .bindPopup(popupContent, {
+          className: 'custom-leaflet-popup',
+          closeButton: false,
+          offset: L.point(0, -10),
+        });
+
+      marker.on('click', () => {
+        onSelectStudio(studio);
+      });
+
+      leafletMarkersRef.current[studio.id] = marker;
+    });
+
+    if (studios.length > 0) {
+      const group = L.featureGroup(Object.values(leafletMarkersRef.current));
+      map.fitBounds(group.getBounds().pad(0.1));
+    }
+  }, [activeMapType, studios]);
+
+  // 7. Handle smooth pan on Leaflet Map when selectedStudio changes
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (activeMapType !== 'leaflet' || !map || !selectedStudio) return;
+
+    map.setView([selectedStudio.latitude, selectedStudio.longitude], 15, {
+      animate: true,
+      duration: 1.0,
+    });
+
+    const marker = leafletMarkersRef.current[selectedStudio.id];
+    if (marker) {
+      setTimeout(() => {
+        marker.openPopup();
+      }, 300);
+    }
+  }, [activeMapType, selectedStudio]);
 
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
@@ -244,27 +387,71 @@ export default function StudioMap({
 
   return (
     <div className="flex flex-col gap-3 w-full">
+      {/* Map Type Toggle Header */}
+      <div className="flex items-center justify-between bg-slate-950/50 p-1.5 rounded-2xl border border-slate-900/60 backdrop-blur-sm">
+        <span className="text-xs font-bold text-slate-400 pl-2.5 flex items-center gap-1.5">
+          <MapPin className="w-3.5 h-3.5 text-rose-500" />
+          합주실 위치 지도
+        </span>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (!clientId) {
+                alert('네이버 지도 API 클라이언트 ID가 환경변수(VITE_NAVER_MAP_CLIENT_ID)에 등록되어 있지 않습니다. 글로벌 지도를 이용해 주세요!');
+                return;
+              }
+              setActiveMapType('naver');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 ${
+              activeMapType === 'naver'
+                ? 'bg-rose-600/10 border border-rose-500/30 text-rose-400 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <span>네이버 지도</span>
+            {!clientId && <span className="text-[9px] px-1.5 py-0.5 bg-slate-900 text-slate-500 rounded font-normal">미설정</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveMapType('leaflet')}
+            className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 ${
+              activeMapType === 'leaflet'
+                ? 'bg-rose-600/10 border border-rose-500/30 text-rose-400 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5 shrink-0" />
+            <span>글로벌 지도 (무료/인증 불필요)</span>
+          </button>
+        </div>
+      </div>
+
       {/* Map Main Container */}
       <div className="relative w-full h-[320px] md:h-[400px] rounded-2xl overflow-hidden border border-slate-900 bg-slate-950/80 shadow-inner group flex items-center justify-center">
         {/* Map Element */}
-        {scriptLoaded && !scriptError ? (
-          <div id="studio-map-pane" ref={mapContainerRef} className="w-full h-full z-10" />
+        {activeMapType === 'naver' ? (
+          scriptLoaded && !scriptError ? (
+            <div id="studio-map-pane" key="naver-map" ref={mapContainerRef} className="w-full h-full z-10" />
+          ) : (
+            <div className="flex flex-col items-center justify-center p-6 text-center max-w-md z-10">
+              {scriptError ? (
+                <>
+                  <AlertTriangle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
+                  <h3 className="text-sm font-bold text-slate-200 mb-2">네이버 지도 연동 오류</h3>
+                  <p className="text-xs text-slate-400 mb-4">{scriptError}</p>
+                </>
+              ) : (
+                <>
+                  <div className="w-8 h-8 rounded-full border-2 border-rose-500 border-t-transparent animate-spin mb-4" />
+                  <h3 className="text-sm font-bold text-slate-200 mb-1">네이버 지도 불러오는 중</h3>
+                  <p className="text-xs text-slate-400">네이버 지도 API를 안전하게 연동하고 있습니다...</p>
+                </>
+              )}
+            </div>
+          )
         ) : (
-          <div className="flex flex-col items-center justify-center p-6 text-center max-w-md z-10">
-            {scriptError ? (
-              <>
-                <AlertTriangle className="w-12 h-12 text-rose-500 mb-4 animate-bounce" />
-                <h3 className="text-sm font-bold text-slate-200 mb-2">네이버 지도 연동 오류</h3>
-                <p className="text-xs text-slate-400 mb-4">{scriptError}</p>
-              </>
-            ) : (
-              <>
-                <div className="w-8 h-8 rounded-full border-2 border-rose-500 border-t-transparent animate-spin mb-4" />
-                <h3 className="text-sm font-bold text-slate-200 mb-1">네이버 지도 불러오는 중</h3>
-                <p className="text-xs text-slate-400">네이버 지도 API를 안전하게 연동하고 있습니다...</p>
-              </>
-            )}
-          </div>
+          <div id="studio-map-pane-leaflet" key="leaflet-map" ref={mapContainerRef} className="w-full h-full z-10 animate-fade-in" />
         )}
 
         {/* Floating Info Overlay (Minimal & Slick) */}
